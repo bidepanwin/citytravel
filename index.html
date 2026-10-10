@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>城市周末旅行指南 · 把周末交给一座城</title>
+<meta name="description" content="面向杭州出发的周末短途旅行指南：12 个 2 小时交通圈内的目的地，含时长、预算、最佳时节与行程建议。">
+<link rel="stylesheet" href="assets/css/style.css">
+<!-- 腾讯地图 GL JS · 代理模式安全配置。
+     必须在 SDK 脚本之前设置；前端不出现任何 key，服务请求由本地代理转发。
+     serviceHost 里的两个占位符（HTTP 端口 / 代理密钥）由 WorkBuddy 运行时自动替换，
+     请勿手工改写成具体数值。注意：这里已经配好代理，就不要再调用 TMap.setConfig()，
+     两者同时用会让底图变空白。 -->
+<script>
+  window._TMapSecurityConfig = {
+    serviceHost: 'http://127.0.0.1:__WB_HTTP_PORT__/_TMapService/_wbt/__WB_TMAP_SECRET__'
+  };
+</script>
+</head>
+<body>
+
+<!-- ============ 顶栏 ============ -->
+<header class="site-header" id="siteHeader">
+  <div class="wrap header-inner">
+    <a class="brand" href="#top">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="1.6" opacity=".35"/>
+          <path d="M6 21.5l6.5-9 4.5 6 3-4 6 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="21.5" cy="9.5" r="2.6" fill="currentColor"/>
+        </svg>
+      </span>
+      <span class="brand-text">
+        <strong>周末指南</strong>
+        <small>City Weekend Guide</small>
+      </span>
+    </a>
+
+    <nav class="nav" aria-label="主导航">
+      <a href="#top" class="active">首页</a>
+      <a href="#destinations">目的地</a>
+      <a href="#map">地图</a>
+      <a href="#tips">出行贴士</a>
+    </nav>
+
+    <div class="header-actions">
+      <button class="icon-btn" id="themeHint" type="button" title="站点为浅色主题">浅色</button>
+      <a class="btn btn-primary btn-sm" href="#destinations">开始挑路线</a>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ============ Hero ============ -->
+  <section class="hero">
+    <div class="hero-bg" aria-hidden="true">
+      <svg viewBox="0 0 1440 620" preserveAspectRatio="xMidYMax slice">
+        <defs>
+          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stop-color="#fdf6ec"/>
+            <stop offset="55%"  stop-color="#f7e8d6"/>
+            <stop offset="100%" stop-color="#eef0e6"/>
+          </linearGradient>
+          <linearGradient id="m1" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#c9d6c4"/><stop offset="100%" stop-color="#a9bda4"/>
+          </linearGradient>
+          <linearGradient id="m2" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#93ab90"/><stop offset="100%" stop-color="#6f8a72"/>
+          </linearGradient>
+          <linearGradient id="m3" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#5d7a66"/><stop offset="100%" stop-color="#415a4a"/>
+          </linearGradient>
+        </defs>
+        <rect width="1440" height="620" fill="url(#sky)"/>
+        <circle cx="1105" cy="175" r="74" fill="#f6d3a3" opacity=".85"/>
+        <circle cx="1105" cy="175" r="112" fill="#f6d3a3" opacity=".22"/>
+        <path d="M0 400 L190 268 L330 372 L470 246 L640 400 L800 300 L960 412 L1140 286 L1300 396 L1440 320 L1440 620 L0 620 Z" fill="url(#m1)" opacity=".85"/>
+        <path d="M0 470 L170 356 L330 462 L520 342 L700 470 L880 380 L1060 486 L1260 372 L1440 470 L1440 620 L0 620 Z" fill="url(#m2)" opacity=".9"/>
+        <path d="M0 546 L200 452 L400 552 L620 448 L840 556 L1060 462 L1280 556 L1440 486 L1440 620 L0 620 Z" fill="url(#m3)"/>
+        <rect y="592" width="1440" height="28" fill="#415a4a" opacity=".55"/>
+      </svg>
+    </div>
+
+    <div class="wrap hero-inner">
+      <p class="hero-kicker">杭州出发 · 2 小时交通圈</p>
+      <h1 class="hero-title">把周末，<br>交给一座<span class="hl">城</span></h1>
+      <p class="hero-sub">
+        12 条已经算好时间与预算的周末路线——不用做攻略，周五下班决定，周六早上出发。
+      </p>
+
+      <form class="search" id="searchForm" role="search" autocomplete="off">
+        <span class="search-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M16.2 16.2L21 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </span>
+        <input type="search" id="searchInput" placeholder="搜目的地、城市或玩法，例如「海岛」「古镇」「徒步」" aria-label="搜索目的地">
+        <button class="btn btn-primary" type="submit">搜索</button>
+      </form>
+
+      <div class="hero-chips" id="heroChips"><!-- JS 注入 --></div>
+
+      <dl class="hero-stats" id="heroStats"><!-- JS 注入 --></dl>
+    </div>
+  </section>
+
+  <!-- ============ 目的地 ============ -->
+  <section class="section" id="destinations">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <h2 class="section-title">精选目的地</h2>
+          <p class="section-desc">按主题筛选，或按评分、预算、时长排序。</p>
+        </div>
+        <p class="result-count" id="resultCount"></p>
+      </div>
+
+      <div class="toolbar">
+        <div class="chips" id="categoryChips" role="tablist" aria-label="主题筛选"><!-- JS 注入 --></div>
+        <div class="toolbar-right">
+          <label class="select-wrap">
+            <span class="sr-only">排序方式</span>
+            <select id="sortSelect">
+              <option value="rating">按评分排序</option>
+              <option value="budget">按预算从低到高</option>
+              <option value="duration">按时长从短到长</option>
+              <option value="name">按名称排序</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="grid" id="grid"></div>
+
+      <div class="empty" id="empty" hidden>
+        <p class="empty-title">没有匹配的目的地</p>
+        <p class="empty-desc">换个关键词试试，或者点「全部」看完整清单。</p>
+        <button class="btn btn-ghost" type="button" id="resetBtn">重置筛选</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 地图 ============ -->
+  <section class="section" id="map">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <h2 class="section-title">目的地分布</h2>
+          <p class="section-desc">12 个目的地全部落在杭州 2 小时交通圈内，集中在浙北、浙西与皖南一带。点地图上的图钉或右侧清单，都能打开详情。</p>
+        </div>
+        <div class="map-head-actions">
+          <p class="result-count" id="mapCount"></p>
+          <button class="btn btn-ghost btn-sm" type="button" id="mapReset">地图全览</button>
+        </div>
+      </div>
+
+      <div class="map-panel">
+        <div class="map-canvas">
+          <div class="map-root" id="wbMap"></div>
+          <div class="map-legend" id="mapLegend"></div>
+          <div class="map-overlay" id="mapOverlay" role="status">
+            <span class="map-spinner" id="mapSpinner" aria-hidden="true"></span>
+            <p class="map-overlay-title" id="mapOverlayTitle">正在加载地图</p>
+            <p class="map-overlay-desc" id="mapOverlayDesc">滚动到此处后开始连接地图服务。</p>
+            <ul class="map-fallback" id="mapOverlayList"></ul>
+          </div>
+        </div>
+
+        <aside class="map-side" aria-label="目的地清单">
+          <p class="map-side-head">自北向南排列</p>
+          <ul class="map-list" id="mapList"></ul>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 出行贴士 ============ -->
+  <section class="section section-alt" id="tips">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <h2 class="section-title">周末出行贴士</h2>
+          <p class="section-desc">三条能省下大半折腾时间的经验。</p>
+        </div>
+      </div>
+      <div class="tips">
+        <article class="tip">
+          <span class="tip-no">01</span>
+          <h3>周五晚订票，溢价最高</h3>
+          <p>周末短途的交通峰值出现在周五 18:00–22:00，改到周四晚或周六早 7 点前出发，票价与路段拥堵通常都能明显改善。</p>
+        </article>
+        <article class="tip">
+          <span class="tip-no">02</span>
+          <h3>古镇看「夜」，山野看「早」</h3>
+          <p>水乡类目的地白天人流集中，真正好看的时段是 20:00 之后与次日 7:00 之前；山野类则相反，云海与光线需要早起。</p>
+        </article>
+        <article class="tip">
+          <span class="tip-no">03</span>
+          <h3>预算先按「人均/天」估</h3>
+          <p>卡片里的预算已按 2 人同行、含住宿与交通折算。独行需上浮约 30%，三人以上可下降约 15%。</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ 页脚 ============ -->
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <div class="footer-brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="1.6" opacity=".35"/>
+          <path d="M6 21.5l6.5-9 4.5 6 3-4 6 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="21.5" cy="9.5" r="2.6" fill="currentColor"/>
+        </svg>
+      </span>
+      <p>周末指南 · 把两天过成一次小旅行</p>
+    </div>
+    <nav class="footer-nav">
+      <a href="#destinations">目的地</a>
+      <a href="#map">地图</a>
+      <a href="#tips">出行贴士</a>
+      <a href="#top">回到顶部</a>
+    </nav>
+    <p class="footer-note">纯前端演示站点 · 数据为整理值，出行前请再次核对票务与开放时间<br>
+      封面照片来自 <a href="https://www.pexels.com/" target="_blank" rel="noopener noreferrer">Pexels</a>（Pexels License，免版权可商用），已本地化到项目中、离线可用；标有「同类景观示意 / 同区域示意」角标的，表示免版权图库中暂无该景点本尊照片。</p>
+  </div>
+</footer>
+
+<!-- ============ 详情弹层 ============ -->
+<div class="modal" id="modal" hidden>
+  <div class="modal-mask" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <button class="modal-close" type="button" data-close aria-label="关闭">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+    <div class="modal-cover" id="modalCover"></div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script src="assets/js/data.js"></script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>
