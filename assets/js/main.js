@@ -422,6 +422,185 @@ function renderMapList(list) {
   }
 }
 
+/* =========================================================
+ * 静态位置示意图（零网络依赖的兜底方案）
+ * ---------------------------------------------------------
+ * 为什么线上一定要兜底：腾讯地图在这里走的是「本地代理 + 前端零密钥」模式
+ * （见 index.html 的 _TMapSecurityConfig），那个代理只存在于本机预览环境，
+ * 公网访客的浏览器里根本没有它；而且 GitHub Pages 是 HTTPS，
+ * 浏览器会直接拦掉指向 http 服务地址的请求（混合内容策略）。
+ * 所以静态托管下在线底图必然拿不到 —— 这不是配置问题，是原理限制。
+ *
+ * 兜底图的做法：用墨卡托把经纬度还原成画布坐标，只画
+ * 「点 + 名称 + 杭州辐射圈」，不依赖任何瓦片服务、不绘制任何行政边界，
+ * 因此离线和 GitHub Pages 都能正常显示，筛选 / 清单 / 弹层照样联动。
+ * 想要真实底图，填 assets/js/config.js 里的 tmapKey 即可。
+ * ======================================================= */
+const STATIC_MAP = { active: false, list: [] };
+const HUB_RING_KM = 200;                    /* 2 小时交通圈的示意半径 */
+
+/* 读取站点配置里的地图 Key（config.js） */
+function siteTmapKey() {
+  return String((window.SITE_CONFIG && window.SITE_CONFIG.tmapKey) || '').trim();
+}
+
+/* 墨卡托纬度投影：与在线地图同一套投影，南北方位才对得上 */
+function mercY(lat) {
+  return Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+}
+
+/* 标签避让：浙北几个点相距不到 40 公里，不避让必然糊成一团。
+   每个标签从 6 个候选方位里挑第一个「不出画布且不与已放置标签重叠」的位置。 */
+function placeStaticLabels(nodes, W, H) {
+  const CAND = [
+    { dx: 11, dy: 4.5, anchor: 'start' },
+    { dx: -11, dy: 4.5, anchor: 'end' },
+    { dx: 0, dy: -16, anchor: 'middle' },
+    { dx: 0, dy: 25, anchor: 'middle' },
+    { dx: 13, dy: -13, anchor: 'start' },
+    { dx: -13, dy: -13, anchor: 'end' }
+  ];
+  const boxes = [];
+  nodes.forEach((n) => {
+    const w = n.name.length * 13 + 16;
+    const h = 21;
+    let pick = CAND[0];
+    for (let i = 0; i < CAND.length; i++) {
+      const c = CAND[i];
+      let x = n.x + c.dx;
+      if (c.anchor === 'end') x -= w;
+      else if (c.anchor === 'middle') x -= w / 2;
+      const y = n.y + c.dy - h / 2;
+      const box = { x0: x, y0: y, x1: x + w, y1: y + h };
+      const inCanvas = box.x0 > 3 && box.x1 < W - 3 && box.y0 > 3 && box.y1 < H - 3;
+      const hit = boxes.some((b) => !(box.x1 < b.x0 || box.x0 > b.x1 || box.y1 < b.y0 || box.y0 > b.y1));
+      if (inCanvas && !hit) { pick = c; boxes.push(box); break; }
+      if (i === CAND.length - 1) boxes.push(box);   /* 都不行就就近硬放，至少不来回跳 */
+    }
+    n.label = pick;
+  });
+}
+
+/* ---------- 生成示意图 SVG ---------- */
+function staticMapSVG(list) {
+  /* viewBox 比例刻意贴近画布（约 1.75），等比缩放到容器后左右留白最少 */
+  const W = 820, H = 470, PAD = 52;
+  const D2R = Math.PI / 180;
+  const EARTH_R = 6378.137;                     /* km，只用于把「公里」换成画布像素 */
+  const on = {};
+  list.forEach((d) => { on[d.id] = 1; });
+
+  const lats = DESTINATIONS.map((d) => d.coord[1]).concat([HOME.coord[1]]);
+  const lngs = DESTINATIONS.map((d) => d.coord[0]).concat([HOME.coord[0]]);
+  const minLat = Math.min.apply(null, lats), maxLat = Math.max.apply(null, lats);
+  const minLng = Math.min.apply(null, lngs), maxLng = Math.max.apply(null, lngs);
+  /* 关键：经度也要换成弧度再和墨卡托 y 比。一边用「度」一边用「弧度」量纲不一致，
+     会让纵向被压扁 —— 12 个点全挤在一条横线上，圆圈也被拉成椭圆。 */
+  const minX = minLng * D2R, maxX = maxLng * D2R;
+  const minY = mercY(minLat), maxY = mercY(maxLat);
+
+  const k = Math.min((W - PAD * 2) / (maxX - minX), (H - PAD * 2) / (maxY - minY));
+  const ox = W / 2 - ((minX + maxX) / 2) * k;
+  const oy = H / 2 + ((minY + maxY) / 2) * k;
+  const proj = (c) => ({ x: c[0] * D2R * k + ox, y: oy - mercY(c[1]) * k });
+
+  /* 经纬网格：只做方位参照，不带任何行政含义 */
+  let grid = '';
+  for (let g = Math.ceil(minLng); g <= Math.floor(maxLng); g++) {
+    const x = (g * D2R * k + ox).toFixed(1);
+    grid += '<line class="mstat-grid" x1="' + x + '" y1="0" x2="' + x + '" y2="' + H + '"/>';
+  }
+  for (let g = Math.ceil(minLat); g <= Math.floor(maxLat); g++) {
+    const y = (oy - mercY(g) * k).toFixed(1);
+    grid += '<line class="mstat-grid" x1="0" y1="' + y + '" x2="' + W + '" y2="' + y + '"/>';
+  }
+
+  const home = proj(HOME.coord);
+  /* 墨卡托上 1 弧度经度 ≈ EARTH_R·cos(φ) 公里，据此把 200 公里换成像素，
+     这样画出来的才是正圆而不是椭圆 */
+  const ringR = (HUB_RING_KM * k) / (EARTH_R * Math.cos(HOME.coord[1] * D2R));
+
+  const nodes = DESTINATIONS.map((d) => {
+    const p = proj(d.coord);
+    return { id: d.id, name: d.name, x: p.x, y: p.y, color: catColor(d.category), hit: !!on[d.id] };
+  });
+  /* 出发地也参与标签避让，否则「杭州」容易被邻居盖住 */
+  const all = nodes.concat([{ id: HOME.id, name: '杭州 · 出发地', x: home.x, y: home.y, color: '#221f1a', hit: true }]);
+  placeStaticLabels(all, W, H);
+
+  /* 辐射线：只画命中项，表达「都从杭州出发」 */
+  let rays = '';
+  nodes.forEach((n) => {
+    if (!n.hit) return;
+    rays += '<line class="mstat-ray" x1="' + home.x.toFixed(1) + '" y1="' + home.y.toFixed(1) +
+            '" x2="' + n.x.toFixed(1) + '" y2="' + n.y.toFixed(1) + '"/>';
+  });
+
+  function labelSVG(n) {
+    const lb = n.label;
+    return '<text class="mstat-lb" x="' + (n.x + lb.dx).toFixed(1) + '" y="' + (n.y + lb.dy).toFixed(1) +
+           '" text-anchor="' + lb.anchor + '" dominant-baseline="middle">' + n.name + '</text>';
+  }
+
+  const homeNode =
+    '<g class="mstat-node mstat-node-home" data-id="' + HOME.id + '">' +
+      '<circle class="mstat-halo" cx="' + home.x.toFixed(1) + '" cy="' + home.y.toFixed(1) + '" r="14"/>' +
+      '<circle class="mstat-pt" cx="' + home.x.toFixed(1) + '" cy="' + home.y.toFixed(1) + '" r="7.5" fill="#221f1a"/>' +
+      '<circle cx="' + home.x.toFixed(1) + '" cy="' + home.y.toFixed(1) + '" r="3" fill="#f6d38f"/>' +
+      labelSVG(all[all.length - 1]) +
+    '</g>';
+
+  const destNodes = nodes.map((n) => (
+    '<g class="mstat-node' + (n.hit ? '' : ' is-dim') + '" data-id="' + n.id + '" tabindex="0" role="button" aria-label="查看 ' + n.name + ' 详情">' +
+      '<circle class="mstat-hit" cx="' + n.x.toFixed(1) + '" cy="' + n.y.toFixed(1) + '" r="14"/>' +
+      '<circle class="mstat-halo" cx="' + n.x.toFixed(1) + '" cy="' + n.y.toFixed(1) + '" r="11"/>' +
+      '<circle class="mstat-pt" cx="' + n.x.toFixed(1) + '" cy="' + n.y.toFixed(1) + '" r="6.5" fill="' + n.color + '"/>' +
+      labelSVG(n) +
+    '</g>'
+  )).join('');
+
+  return '' +
+    '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="目的地相对位置示意图">' +
+      '<defs>' +
+        '<linearGradient id="mstat-bg" x1="0" y1="0" x2="0.4" y2="1">' +
+          '<stop offset="0%" stop-color="#fdf9f2"/>' +
+          '<stop offset="100%" stop-color="#f4f1e8"/>' +
+        '</linearGradient>' +
+      '</defs>' +
+      '<rect width="' + W + '" height="' + H + '" fill="url(#mstat-bg)"/>' +
+      grid +
+      '<circle class="mstat-ring" cx="' + home.x.toFixed(1) + '" cy="' + home.y.toFixed(1) + '" r="' + ringR.toFixed(1) + '"/>' +
+      '<text class="mstat-ring-lb" x="' + home.x.toFixed(1) + '" y="' + (home.y + ringR + 15).toFixed(1) + '" text-anchor="middle">2 小时交通圈（示意）</text>' +
+      rays +
+      homeNode +
+      destNodes +
+    '</svg>';
+}
+
+/* 渲染 / 切换到示意图模式 */
+function renderStaticMap(list) {
+  const el = $('#mapStatic');
+  if (!el) return;
+  STATIC_MAP.list = list;
+  el.innerHTML = staticMapSVG(list);
+  el.hidden = false;
+}
+
+function showStaticMap(reason) {
+  const first = !STATIC_MAP.active;
+  STATIC_MAP.active = true;
+  mapState.failed = true;
+  clearTimeout(mapState.slowTimer);
+  const ov = $('#mapOverlay'); if (ov) ov.hidden = true;
+  const root = $('#wbMap'); if (root) root.hidden = true;   /* 收起在线地图容器（含 SDK 自插的控件） */
+  const note = $('#mapStaticNote');
+  if (note) { note.hidden = false; if (reason) note.title = reason; }
+  const btn = $('#mapReset');
+  if (btn) btn.hidden = true;                               /* 示意图没有视野概念，全览按钮先收起来 */
+  renderStaticMap(mapState.pending || applyFilter());
+  if (first) renderMapList(STATIC_MAP.list);
+}
+
 /* ---------- 遮罩：加载中 / 成功 / 降级 ---------- */
 function mapLoading() {
   const ov = $('#mapOverlay');
@@ -450,20 +629,11 @@ function mapReady() {
 }
 function mapFail(reason) {
   if (mapState.ready || mapState.failed) return;
-  mapState.failed = true;
-  clearTimeout(mapState.slowTimer);
-  const ov = $('#mapOverlay');
-  if (!ov) return;
-  /* 把地图容器整个收起来：缩放控件、比例尺、版权署名都是 SDK 自己插进容器的 DOM，
-     它们的层级比遮罩高，不收起就会从降级提示底下透出来。 */
-  const root = $('#wbMap');
-  if (root) root.hidden = true;
-  ov.hidden = false;
-  const sp = $('#mapSpinner'); if (sp) sp.hidden = true;
-  $('#mapOverlayTitle').textContent = '地图暂不可用';
-  $('#mapOverlayDesc').textContent = reason + '先按城市列出全部目的地，点不点地图都不影响看攻略。';
-  $('#mapOverlayList').innerHTML = fallbackListHTML();
+  /* 在线底图拿不到（静态托管 / 离线 / 网络策略拦截）时，
+     不再只丢一句「暂不可用」，直接换成按经纬度还原的位置示意图。 */
+  showStaticMap(reason);
 }
+/* 备用：把目的地按省份分组的一行式清单（示意图渲染失败时才需要） */
 function fallbackListHTML() {
   const groups = [];
   DESTINATIONS.forEach((d) => {
@@ -477,14 +647,21 @@ function fallbackListHTML() {
 }
 
 /* ---------- 注入 SDK ---------- */
-function loadTMapSDK(done) {
+function loadTMapSDK(useOwnKey, done) {
   if (window.TMap) { done(true); return; }
   let settled = false;
   const finish = (ok) => { if (settled) return; settled = true; done(ok); };
+  let url = 'https://map.qq.com/api/gljs?v=1.exp';
+  if (useOwnKey) {
+    /* 用自己的 Key 走标准模式：必须先撤掉代理配置 —— 两者同时存在，
+       官方明确说明会导致底图变空白。 */
+    try { delete window._TMapSecurityConfig; } catch (e) { window._TMapSecurityConfig = undefined; }
+    url += '&key=' + encodeURIComponent(siteTmapKey());
+  }
   const s = document.createElement('script');
   s.charset = 'utf-8';
   s.async = true;
-  s.src = 'https://map.qq.com/api/gljs?v=1.exp';   /* 不带 key：走 _TMapSecurityConfig 代理 */
+  s.src = url;
   s.onload = () => finish(!!window.TMap);
   s.onerror = () => finish(false);
   document.head.appendChild(s);
@@ -578,6 +755,7 @@ function buildMap(root) {
 function syncMap(list) {
   mapState.pending = list;
   renderMapList(list);
+  if (STATIC_MAP.active) renderStaticMap(list);   /* 示意图模式下，筛选结果直接重绘 */
 
   const markers = mapState.markers;
   if (!markers) return;
@@ -637,13 +815,17 @@ function initMap() {
   if (!root) return;
   renderLegend();
 
-  /* 部署环境护栏 —— 见 mapProxyUsable 的注释。
-     判据只看协议，不看占位符是否被替换，以免影响本地 file:// 与预览环境的既有行为。 */
+  /* 三条路，按优先级：
+     1) 配了自己的 Key（config.js）→ 标准模式，HTTPS 站点下也能出真实底图；
+     2) 没配 Key、但能连本地代理 → 预览环境的原行为，保留不变；
+     3) 两个都没有（GitHub Pages 等静态托管）→ 直接上位置示意图，不留一块空白。 */
   const cfg = window._TMapSecurityConfig || {};
   const protocol = (typeof location !== 'undefined' && location) ? location.protocol : 'file:';
-  if (!mapProxyUsable(protocol, cfg.serviceHost)) {
+  const ownKey = siteTmapKey();
+
+  if (!ownKey && !mapProxyUsable(protocol, cfg.serviceHost)) {
     mapState.started = true;
-    mapFail('当前是静态托管环境（HTTPS），地图服务需要本地代理，无法在此访问。');
+    showStaticMap('当前是静态托管环境（HTTPS），在线地图服务无法在此访问。');
     return;
   }
 
@@ -651,7 +833,7 @@ function initMap() {
     if (mapState.started) return;
     mapState.started = true;
     mapLoading();
-    loadTMapSDK((ok) => {
+    loadTMapSDK(!!ownKey, (ok) => {
       if (!ok) { mapFail('地图服务未能加载（离线或被网络策略拦截）。'); return; }
       try { buildMap(root); }
       catch (e) { mapFail('地图初始化失败。'); }
@@ -831,6 +1013,31 @@ function initEvents() {
   $('#mapReset').addEventListener('click', () => {
     if (mapState.map) fitToList(DESTINATIONS);
   });
+
+  /* 位置示意图：点圆点开详情，悬停时右侧清单同步高亮（与在线地图同一套交互） */
+  const sm = $('#mapStatic');
+  if (sm) {
+    sm.addEventListener('click', (e) => {
+      const g = e.target.closest('.mstat-node');
+      if (g && g.dataset.id && g.dataset.id !== HOME.id) openModal(g.dataset.id);
+    });
+    sm.addEventListener('keydown', (e) => {
+      const g = e.target.closest('.mstat-node');
+      if (g && g.dataset.id && g.dataset.id !== HOME.id && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault();
+        openModal(g.dataset.id);
+      }
+    });
+    sm.addEventListener('mouseover', (e) => {
+      const g = e.target.closest('.mstat-node');
+      const id = g && g.dataset.id && g.dataset.id !== HOME.id ? g.dataset.id : '';
+      if (id === mapState.hoverId) return;
+      mapState.hoverId = id;
+      document.querySelectorAll('#mapList .map-item').forEach((b) => {
+        b.classList.toggle('is-hover', b.dataset.id === id);
+      });
+    });
+  }
 
   /* 滚动阴影 */
   const onScroll = () => $('#siteHeader').classList.toggle('is-scrolled', window.scrollY > 8);

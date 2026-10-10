@@ -1,0 +1,11 @@
+# WorkBuddy 本地工作区（记忆、临时状态），不纳入版本管理
+.workbuddy/
+
+# 本地临时预览/诊断页（以 _ 开头，仅用于开发期截图验证）
+_*.html
+
+# 操作系统与编辑器杂项
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log

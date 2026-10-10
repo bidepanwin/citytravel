@@ -156,6 +156,11 @@
       <div class="map-panel">
         <div class="map-canvas">
           <div class="map-root" id="wbMap"></div>
+          <!-- 静态托管 / 离线时的兜底：按经纬度还原的相对位置示意图（零网络依赖） -->
+          <div class="map-static" id="mapStatic" hidden></div>
+          <p class="map-static-note" id="mapStaticNote" hidden>
+            位置示意图 · 按经纬度还原各目的地相对位置，未绘制行政边界。点圆点看详情
+          </p>
           <div class="map-legend" id="mapLegend"></div>
           <div class="map-overlay" id="mapOverlay" role="status">
             <span class="map-spinner" id="mapSpinner" aria-hidden="true"></span>
@@ -240,6 +245,7 @@
   </div>
 </div>
 
+<script src="assets/js/config.js"></script>
 <script src="assets/js/data.js"></script>
 <script src="assets/js/main.js"></script>
 </body>

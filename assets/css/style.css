@@ -483,6 +483,47 @@ body.modal-open { overflow: hidden; }
 .map-canvas { position: relative; z-index: 0; height: 540px; background: var(--bg-soft); }
 .map-root { position: absolute; inset: 0; }
 
+/* ---------- 位置示意图：静态托管 / 离线时的兜底（零网络依赖） ---------- */
+.map-static { position: absolute; inset: 0; }
+.map-static svg { display: block; width: 100%; height: 100%; }
+.mstat-grid { stroke: rgba(34, 31, 26, .055); stroke-width: 1; }
+.mstat-ring { fill: rgba(192, 86, 58, .04); stroke: rgba(192, 86, 58, .34); stroke-width: 1.5; stroke-dasharray: 7 6; }
+.mstat-ring-lb { font-size: 11px; font-weight: 600; fill: rgba(192, 86, 58, .7); }
+.mstat-ray { stroke: rgba(34, 31, 26, .17); stroke-width: 1; stroke-dasharray: 3 5; }
+.mstat-node { cursor: pointer; }
+.mstat-node:focus { outline: none; }
+.mstat-hit { fill: transparent; }
+.mstat-halo { fill: #fff; opacity: .9; transition: opacity .16s ease; }
+.mstat-pt {
+  stroke: #fff; stroke-width: 2;
+  transform-box: fill-box; transform-origin: center;
+  transition: transform .16s ease;
+}
+.mstat-node:hover .mstat-pt, .mstat-node:focus-visible .mstat-pt { transform: scale(1.22); }
+/* 文字带同色描边：压到辐射虚线上也不会糊 */
+.mstat-lb {
+  font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--ink);
+  paint-order: stroke; stroke: rgba(253, 249, 242, .95); stroke-width: 3.4; stroke-linejoin: round;
+  transition: fill .16s ease;
+}
+.mstat-node:hover .mstat-lb { fill: var(--accent); }
+.mstat-node-home .mstat-lb { fill: var(--accent); }
+.mstat-node.is-dim { opacity: .26; }
+.mstat-node.is-dim .mstat-lb { font-weight: 600; }
+
+/* 示意图下方的说明，替代原来的「地图暂不可用」提示。
+   用 left/right + margin:auto 居中：若只用 left:50%+translateX(-50%)，
+   shrink-to-fit 的可用宽度只剩一半，一行字会被硬折成两行。 */
+.map-static-note {
+  position: absolute; left: 14px; right: 14px; bottom: 12px;
+  z-index: 6; margin: 0 auto; padding: 6px 14px; max-width: 620px;
+  font-size: 11.5px; line-height: 1.5; color: var(--ink-3); text-align: center;
+  background: rgba(255, 255, 255, .88);
+  border: 1px solid var(--line); border-radius: 999px;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+
 /* 图例：叠在画布左上角，用来解释右侧清单的圆点颜色 */
 .map-legend {
   position: absolute; left: 14px; top: 14px; z-index: 6;
